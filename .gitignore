@@ -1,0 +1,9 @@
+*.mod
+*.log
+*.dat
+dft.dSYM
+*.pdf
+*.eps
+figs/
+output/
+*.txt
