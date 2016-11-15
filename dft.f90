@@ -16,7 +16,7 @@ module dft
     
     private
 
-    public solve_radial
+    public solve_radial, compute_Vhartree, compute_radial_func
 
 
 contains
@@ -25,19 +25,30 @@ contains
     ! solve the radial equation for a give radial function and a given energy
     ! the radial equation is -2*(Vext + E - Veff)
 
+    subroutine compute_radial_func(r,E,V,radial,Z)
+        real(dp),intent(in) :: r(:),E,V(:)
+        integer :: Z
+        real(dp),intent(out) :: radial(:)
+
+        radial(2:) = -2*(E + Z/r(2:)  - V(2:))
+
+
+    end subroutine compute_radial_func
+
+
     subroutine  solve_radial(radial_func, u, r,params)
         implicit none
     
         real(dp), intent(out)    :: u(:)
         real(dp), intent(in)       :: r(:), params(:)
-        real(dp),dimension(size(r))::w
+        real(dp),dimension(size(r))::w , radial_func
         integer  :: n , i
         real(dp) :: h
         real(dp) :: rmax 
         real(dp) :: norm
 
 
-        procedure(callback) :: radial_func
+        
 
 
         ! print *,'solving for E = ' , params(1)
@@ -48,19 +59,19 @@ contains
         ! solve using numerov stepper
         u(n-1:n) =  r(n-1:n) * exp(-r(n-1:n))
         
-        w(n) = (1- h*h/12_dp * radial_func(r(n),params))* u(n)
-        w(n-1) = (1- h*h/12_dp * radial_func(r(n-1),params))* u(n-1)
+        w(n) = (1- h*h/12_dp * radial_func(n))* u(n)
+        w(n-1) = (1- h*h/12_dp * radial_func(n-1))* u(n-1)
         do i = n-2,2,-1
-              w(i) = 2*w(i+1) - w(i+2) + h*h*radial_func(r(i+1),params)*u(i+1)
-              u(i) = w(i)/(1 - h*h/12_dp * radial_func(r(i),params))
+              w(i) = 2*w(i+1) - w(i+2) + h*h*radial_func(i + 1)*u(i+1)
+              u(i) = w(i)/(1 - h*h/12_dp * radial_func(i))
         enddo
         
         
-        u(1) = 2 * u(2) - u(3) +  h*h*radial_func(r(2),params)*u(2)
-        norm = trapz(u**2,h)
+        u(1) = 2 * u(2) - u(3) +  h*h*radial_func(2)*u(2)
+        norm = trapz(u**2,h)*4* pi
         ! if (norm  < 1e-15) stop "norm equal to zero for wavefunction for energy "//params(1)
         u = u / sqrt(norm)
-	end subroutine solve_radial
+    end subroutine solve_radial
 
     ! This routine solve the Poison equation for the give electronic density rho 
     ! and returns the value of the Hartee potentia in Vhartree
@@ -70,12 +81,12 @@ contains
         real(dp), intent(in)  :: rho(:)
         real(dp), intent(out) :: Vhartree(:)
         real(dp), intent(in)  :: h
-        real(dp)              :: x2
         integer               :: nsteps, i
         real(dp),dimension(size(rho)) :: U,r
+        real(dp) :: qmax, alpha
         ! solve here the problem for U using the density
         nsteps = size(Vhartree)
-        r= (/(i*h,i=1,nsteps)/)
+        r= (/(i*h,i=0,nsteps-1)/)
 
         ! solve the auxiliar problem for U(r) = r Vh(r)
         U(1) = 0.0_dp
@@ -84,8 +95,15 @@ contains
         do i = 3, nsteps
             U(i)  =  2  * U(i-1) - U(i-2) + h*h*(-4_dp * pi*r(i)*rho(i)) 
         end do
+
+        ! check this later on can be trouble
+        qmax = trapz(r(2:nsteps)**2*rho(2:nsteps),h) * 4 * pi;
+
+        alpha = (qmax - U(nsteps))/r(nsteps)
+        U = U + r*alpha;
         Vhartree = U/r
         Vhartree(1) = 0.0_dp
+
     end subroutine compute_Vhartree
 
 end module dft
